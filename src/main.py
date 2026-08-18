@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from config import DEFAULT_CONFIG_PATH, load_search_config
+from dedup import deduplicate
 from models import Job
 from sources.adzuna import AdzunaSource
 from sources.arbeitnow import ArbeitnowSource
@@ -36,7 +37,8 @@ def resolve_search_terms(args: argparse.Namespace) -> list[tuple[str, str]]:
 
 def print_job(job: Job) -> None:
     published = job.published_at.strftime("%Y-%m-%d") if job.published_at else "unknown"
-    print(f"[{job.source}] {job.title} — {job.company} ({job.location})")
+    sources_label = "+".join(job.sources or [job.source])
+    print(f"[{sources_label}] {job.title} — {job.company} ({job.location})")
     print(f"  published: {published}")
     print(f"  url: {job.url}")
     print()
@@ -67,7 +69,13 @@ def main() -> None:
                 print(f"[{source.name}] skipping remaining searches for this source")
                 break
 
-    print(f"Found {len(jobs)} job(s) across {len(search_terms)} search term(s)\n")
+    raw_count = len(jobs)
+    jobs = deduplicate(jobs)
+
+    print(
+        f"Found {len(jobs)} unique job(s) (from {raw_count} raw result(s)) "
+        f"across {len(search_terms)} search term(s)\n"
+    )
     for job in jobs:
         print_job(job)
 

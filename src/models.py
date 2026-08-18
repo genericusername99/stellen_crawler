@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -11,3 +11,4 @@ class Job:
     url: str
     source: str
     published_at: datetime | None
+    sources: list[str] = field(default_factory=list)
