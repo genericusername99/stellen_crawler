@@ -7,6 +7,7 @@ import db
 from config import DEFAULT_CONFIG_PATH, load_search_config
 from dedup import deduplicate
 from models import Job
+from scoring import DEFAULT_SCORING_CONFIG_PATH, apply_scoring, load_scoring_config
 from sources.adzuna import AdzunaSource
 from sources.arbeitnow import ArbeitnowSource
 from sources.bundesagentur import BundesagenturSource
@@ -32,6 +33,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Path to the SQLite database file (default: data/jobs.db)",
     )
+    parser.add_argument(
+        "--scoring-config",
+        default=DEFAULT_SCORING_CONFIG_PATH,
+        type=Path,
+        help="Path to the scoring config JSON file (default: scoring_config.json)",
+    )
     return parser.parse_args()
 
 
@@ -47,7 +54,7 @@ def print_job(job: Job, is_new: bool) -> None:
     published = job.published_at.strftime("%Y-%m-%d") if job.published_at else "unknown"
     sources_label = "+".join(job.sources or [job.source])
     new_label = "NEW " if is_new else ""
-    print(f"[{sources_label}] {new_label}{job.title} — {job.company} ({job.location})")
+    print(f"[{sources_label}] {new_label}(score {job.score:+d}) {job.title} — {job.company} ({job.location})")
     print(f"  published: {published}")
     print(f"  url: {job.url}")
     print()
@@ -86,10 +93,14 @@ def main() -> None:
     conn.close()
     new_keys = {(j.title, j.company, j.location) for j in new_jobs}
 
+    scoring_config = load_scoring_config(args.scoring_config)
+    scored_count = len(jobs)
+    jobs = apply_scoring(jobs, scoring_config)
+
     print(
-        f"Found {len(jobs)} unique job(s) (from {raw_count} raw result(s)) "
-        f"across {len(search_terms)} search term(s) "
-        f"— {len(new_jobs)} new, {len(seen_again)} already known\n"
+        f"Found {len(jobs)} unique job(s) (from {raw_count} raw result(s), "
+        f"{scored_count} before score filtering) across {len(search_terms)} "
+        f"search term(s) — {len(new_jobs)} new, {len(seen_again)} already known\n"
     )
     for job in jobs:
         is_new = (job.title, job.company, job.location) in new_keys

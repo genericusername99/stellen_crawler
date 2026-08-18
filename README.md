@@ -35,20 +35,40 @@ Every query is combined with every location across all sources. Running
 `python src\main.py` with no flags reads this file. `--query`/`--location`
 flags run a single one-off search instead, ignoring the config file.
 
+## Scoring configuration
+
+Edit `scoring_config.json` by hand to change how jobs are ranked. Each rule
+adds/subtracts its weight if the (case-insensitive) keyword appears in the
+job's title or description; jobs are sorted by total score, highest first.
+Set `"min_score"` to a number to drop jobs below that score, or `null` to
+keep everything:
+
+```json
+{
+  "min_score": null,
+  "rules": [
+    {"keyword": "Werkstudent", "weight": 5},
+    {"keyword": "Senior", "weight": -5}
+  ]
+}
+```
+
 ## Usage
 
 ```powershell
 python src\main.py
 python src\main.py --query "Werkstudent Informatik" --location "Tübingen"
 python src\main.py --config path\to\other_config.json
+python src\main.py --scoring-config path\to\other_scoring.json
 ```
 
 ## Status
 
 - Sources implemented: Arbeitnow, Adzuna, Bundesagentur für Arbeit (`src/sources/`).
-- Deduplication across sources (`src/dedup.py`) and SQLite persistence with
-  new-job detection (`src/db.py`, `data/jobs.db`) are implemented.
-- Fuzzy (non-exact) deduplication, filtering/scoring, and coverage
-  measurement against a reference job board: not yet implemented.
+- Deduplication across sources (`src/dedup.py`), SQLite persistence with
+  new-job detection (`src/db.py`, `data/jobs.db`), and configurable
+  keyword-based scoring/filtering (`src/scoring.py`) are implemented.
+- Fuzzy (non-exact) deduplication and coverage measurement against a
+  reference job board: not yet implemented.
 
 See `Context.txt` for the full project plan and milestones.

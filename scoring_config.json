@@ -1,0 +1,13 @@
+{
+  "min_score": null,
+  "rules": [
+    {"keyword": "Werkstudent", "weight": 5},
+    {"keyword": "Junior", "weight": 5},
+    {"keyword": "Informatik", "weight": 4},
+    {"keyword": "Systemintegration", "weight": 3},
+    {"keyword": "Automatisierung", "weight": 3},
+    {"keyword": "Cloud", "weight": 2},
+    {"keyword": "Senior", "weight": -5},
+    {"keyword": "5+ years experience", "weight": -5}
+  ]
+}

@@ -12,3 +12,4 @@ class Job:
     source: str
     published_at: datetime | None
     sources: list[str] = field(default_factory=list)
+    score: int = 0
