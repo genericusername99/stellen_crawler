@@ -62,13 +62,38 @@ python src\main.py --config path\to\other_config.json
 python src\main.py --scoring-config path\to\other_scoring.json
 ```
 
+## Coverage measurement
+
+There's no legitimate API for scraping Indeed directly, so coverage is
+measured against a reference list you collect by hand: search a board like
+Indeed yourself, copy `reference_jobs.example.json` to `reference_jobs.json`
+(git-ignored, since it's a one-off manual snapshot that goes stale
+immediately), and fill in the title/company/location of what you found:
+
+```json
+[
+  {"title": "Werkstudent Softwareentwicklung (m/w/d)", "company": "Example GmbH", "location": "Stuttgart"}
+]
+```
+
+Then run:
+
+```powershell
+python src\coverage.py --query "Werkstudent Informatik" --location "Tübingen"
+```
+
+This runs the crawler over the same query/location and reports overlap,
+crawler-only, and reference-only counts, plus the actual titles the crawler
+missed — useful for judging whether a new source is worth adding.
+
 ## Status
 
 - Sources implemented: Arbeitnow, Adzuna, Bundesagentur für Arbeit (`src/sources/`).
 - Deduplication across sources (`src/dedup.py`), SQLite persistence with
-  new-job detection (`src/db.py`, `data/jobs.db`), and configurable
-  keyword-based scoring/filtering (`src/scoring.py`) are implemented.
-- Fuzzy (non-exact) deduplication and coverage measurement against a
-  reference job board: not yet implemented.
+  new-job detection (`src/db.py`, `data/jobs.db`), configurable keyword-based
+  scoring/filtering (`src/scoring.py`), and coverage measurement against a
+  manually collected reference list (`src/coverage.py`) are all implemented.
+- Fuzzy (non-exact) deduplication is the main thing not yet implemented —
+  matching is still exact on normalized company+title+location.
 
 See `Context.txt` for the full project plan and milestones.

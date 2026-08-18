@@ -5,12 +5,9 @@ from pathlib import Path
 
 import db
 from config import DEFAULT_CONFIG_PATH, load_search_config
-from dedup import deduplicate
+from crawl import default_sources, run_search
 from models import Job
 from scoring import DEFAULT_SCORING_CONFIG_PATH, apply_scoring, load_scoring_config
-from sources.adzuna import AdzunaSource
-from sources.arbeitnow import ArbeitnowSource
-from sources.bundesagentur import BundesagenturSource
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -63,30 +60,8 @@ def print_job(job: Job, is_new: bool) -> None:
 def main() -> None:
     args = parse_args()
     search_terms = resolve_search_terms(args)
-    sources = [ArbeitnowSource(), AdzunaSource(), BundesagenturSource()]
 
-    jobs: list[Job] = []
-    seen: set[tuple[str, str]] = set()
-
-    for source in sources:
-        for query, location in search_terms:
-            try:
-                for job in source.search(query, location):
-                    key = (job.source, job.url)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    jobs.append(job)
-            except Exception as exc:
-                print(
-                    f"[{source.name}] search failed for "
-                    f"query={query!r} location={location!r}: {exc}"
-                )
-                print(f"[{source.name}] skipping remaining searches for this source")
-                break
-
-    raw_count = len(jobs)
-    jobs = deduplicate(jobs)
+    jobs, raw_count = run_search(default_sources(), search_terms)
 
     conn = db.connect(args.db)
     new_jobs, seen_again = db.upsert_jobs(conn, jobs)
