@@ -1,0 +1,537 @@
+# Project Context: Job Crawler / Job Aggregator
+
+## Goal
+
+Build a Python-based job crawler / job aggregator for finding relevant job openings in Germany.
+
+The main objective is to create a system that searches multiple job sources, combines the results into one common format, removes duplicates, and eventually ranks jobs according to personal relevance.
+
+The crawler should not depend on a single provider such as Indeed. Instead, it should aggregate several independent sources in order to achieve broad coverage and potentially discover jobs that are missing from individual job boards.
+
+The project should be developed incrementally, with clean and understandable code rather than unnecessary complexity.
+
+---
+
+## Initial Technology Stack
+
+* Python
+* Git
+* `requests`
+* `python-dotenv`
+* SQLite later, once persistence is needed
+* Windows development environment
+* PowerShell for shell commands
+
+Prefer the Python standard library where practical and avoid unnecessary dependencies.
+
+---
+
+## Initial Project Structure
+
+A reasonable starting structure is:
+
+```text
+stellen-crawler/
+│
+├── src/
+│   ├── main.py
+│   ├── models.py
+│   └── sources/
+│       ├── __init__.py
+│       ├── arbeitnow.py
+│       └── adzuna.py
+│
+├── data/
+│
+├── .env
+├── .gitignore
+├── requirements.txt
+└── README.md
+```
+
+This structure may evolve if there is a clear architectural reason to change it.
+
+---
+
+## Job Sources
+
+The first sources to implement should be:
+
+### 1. Arbeitnow
+
+Use the Arbeitnow Job Board API.
+
+It is useful as the first implementation because it does not require authentication.
+
+Endpoint:
+
+```text
+https://www.arbeitnow.com/api/job-board-api
+```
+
+Use it initially to establish the common job-fetching architecture.
+
+---
+
+### 2. Adzuna
+
+Add the Adzuna API as the second source.
+
+Credentials should be stored in `.env`, for example:
+
+```env
+ADZUNA_APP_ID=...
+ADZUNA_APP_KEY=...
+```
+
+Never commit API keys or secrets to Git.
+
+The German search endpoint follows this general structure:
+
+```text
+https://api.adzuna.com/v1/api/jobs/de/search/{page}
+```
+
+Relevant query parameters may include:
+
+```text
+what
+where
+results_per_page
+```
+
+More filters can be added later.
+
+---
+
+### 3. Bundesagentur für Arbeit
+
+The German Federal Employment Agency job database is an important future source because of its broad coverage of the German job market.
+
+Do not implement it before the basic architecture works with Arbeitnow and Adzuna.
+
+---
+
+### 4. Additional sources
+
+Potential future sources include:
+
+* Jooble
+* Greenhouse
+* SmartRecruiters
+* Workday
+* Personio
+* Recruitee
+* Teamtailor
+* JOIN
+* SAP SuccessFactors
+* direct company career pages
+
+The long-term goal is not simply to add as many APIs as possible. New sources should be added based on whether they meaningfully improve job coverage.
+
+---
+
+## Common Job Model
+
+Every source should be converted into the same internal representation.
+
+Create a `Job` model, preferably using a Python `dataclass`.
+
+For example:
+
+```python
+@dataclass
+class Job:
+    title: str
+    company: str
+    location: str
+    description: str | None
+    url: str
+    source: str
+    published_at: datetime | None
+```
+
+Additional fields may later include:
+
+```text
+remote
+employment_type
+salary_min
+salary_max
+salary_currency
+source_job_id
+first_seen
+last_seen
+score
+```
+
+Do not expose source-specific JSON structures throughout the rest of the program. Each source adapter should transform its API response into `Job` objects.
+
+---
+
+## Source Architecture
+
+Each job source should have a clear interface.
+
+Conceptually:
+
+```python
+class JobSource:
+    def search(self, query, location) -> list[Job]:
+        ...
+```
+
+Individual implementations may then look like:
+
+```python
+class ArbeitnowSource(JobSource):
+    ...
+
+class AdzunaSource(JobSource):
+    ...
+```
+
+Avoid overengineering the abstraction at the beginning. A simple shared interface or protocol is sufficient.
+
+---
+
+## Aggregation
+
+The main application should eventually be able to do something conceptually similar to:
+
+```python
+sources = [
+    ArbeitnowSource(),
+    AdzunaSource(),
+]
+
+jobs = []
+
+for source in sources:
+    jobs.extend(source.search(...))
+```
+
+The aggregated results should then go through:
+
+```text
+fetch
+↓
+normalize
+↓
+deduplicate
+↓
+filter
+↓
+score
+↓
+sort
+↓
+store / display
+```
+
+---
+
+## Deduplication
+
+The same vacancy may appear on multiple job boards.
+
+Therefore, source results must eventually be deduplicated.
+
+Do not deduplicate solely by URL because different platforms may have different URLs for the same vacancy.
+
+Useful signals include:
+
+* normalized company name
+* normalized job title
+* location
+* description similarity
+* external/source job ID where available
+
+Start with a simple deterministic solution based on normalized:
+
+```text
+company + title + location
+```
+
+More sophisticated fuzzy matching can be added later if necessary.
+
+When duplicates are merged, preserve information about which sources contained the vacancy.
+
+For example:
+
+```python
+sources = ["adzuna", "arbeitnow"]
+```
+
+---
+
+## Coverage Compared With Job Boards
+
+One major project goal is broad coverage comparable to large job boards such as Indeed.
+
+It is not possible to guarantee that a third-party API contains every vacancy available on Indeed.
+
+Therefore, coverage should be measured empirically rather than assumed.
+
+Later, implement tooling that can compare:
+
+```text
+jobs found by crawler
+jobs found manually on Indeed or another reference job board
+intersection
+crawler-only jobs
+reference-only jobs
+```
+
+Example:
+
+```text
+Reference board:     184 jobs
+Crawler:             213 jobs
+Overlap:             151 jobs
+Reference only:       33 jobs
+Crawler only:         62 jobs
+```
+
+This will help identify which additional sources are actually worth integrating.
+
+---
+
+## Search Scope
+
+The crawler is primarily intended for German IT-related jobs.
+
+Example search terms may include:
+
+```text
+Werkstudent Informatik
+Junior Softwareentwickler
+IT
+Systemintegration
+Automatisierung
+RPA
+Cloud
+Softwareentwicklung
+```
+
+The architecture must support multiple search terms and locations rather than hardcoding one query.
+
+Example locations may include:
+
+```text
+Tübingen
+Reutlingen
+Stuttgart
+```
+
+Radius-based searching may later be useful where supported by the source.
+
+---
+
+## Job Scoring
+
+A later feature should rank jobs based on configurable preferences.
+
+For example:
+
+```text
++5 Werkstudent
++5 Junior
++4 Informatik
++3 Systemintegration
++3 Automatisierung
++2 Cloud
+-5 Senior
+-5 5+ years experience
+```
+
+Do not hardcode the scoring rules deeply into business logic.
+
+They should eventually be configurable, for example through:
+
+```text
+config.json
+config.yaml
+```
+
+or a dedicated configuration module.
+
+Scoring is not part of the first implementation milestone.
+
+---
+
+## Persistence
+
+Initially, printing results to the console is sufficient.
+
+Once fetching and normalization work reliably, introduce SQLite.
+
+The database should eventually make it possible to determine:
+
+* whether a vacancy has already been seen
+* when it was first discovered
+* when it was last seen
+* whether it disappeared
+* whether it is new since the previous crawl
+* which sources contained it
+
+Avoid introducing a database before the basic source integrations work.
+
+---
+
+## Error Handling
+
+External APIs will fail occasionally.
+
+Source failures should not crash the entire crawler.
+
+For example, if Adzuna fails but Arbeitnow succeeds, results from Arbeitnow should still be returned.
+
+Handle at least:
+
+* request timeouts
+* HTTP errors
+* malformed responses
+* missing expected fields
+* authentication errors
+
+Use sensible request timeouts.
+
+Do not silently ignore failures. Print or log useful information about which source failed and why.
+
+---
+
+## Secrets
+
+API credentials must never be committed.
+
+`.gitignore` should include at least:
+
+```gitignore
+.venv/
+.env
+__pycache__/
+*.pyc
+data/
+```
+
+Credentials should be loaded using `python-dotenv`.
+
+---
+
+## Development Priorities
+
+Implement the project in small working milestones.
+
+### Milestone 1
+
+Create the Git repository and basic Python project.
+
+Create:
+
+```text
+src/main.py
+src/models.py
+src/sources/arbeitnow.py
+```
+
+Implement Arbeitnow fetching and print several normalized `Job` objects.
+
+The program should work end-to-end before adding another source.
+
+### Milestone 2
+
+Add Adzuna.
+
+Load credentials from `.env`.
+
+Both sources should return the same `Job` model.
+
+### Milestone 3
+
+Aggregate both sources.
+
+Add basic command-line search configuration.
+
+For example:
+
+```bash
+python src/main.py --query "Werkstudent Informatik" --location "Tübingen"
+```
+
+Exact CLI design can be adjusted if a simpler option is better.
+
+### Milestone 4
+
+Implement basic deduplication.
+
+### Milestone 5
+
+Store jobs in SQLite and identify newly discovered jobs.
+
+### Milestone 6
+
+Add additional high-value sources such as the Bundesagentur für Arbeit.
+
+### Milestone 7
+
+Implement filtering and relevance scoring.
+
+### Milestone 8
+
+Measure coverage and identify missing sources.
+
+---
+
+## Coding Preferences
+
+Keep the code:
+
+* straightforward
+* modular
+* readable
+* typed where useful
+* easy to extend
+* easy to debug
+
+Prefer:
+
+```python
+def search_jobs(...) -> list[Job]:
+```
+
+over unnecessarily complex frameworks or abstractions.
+
+Use `dataclasses`, type hints, and small functions.
+
+Avoid creating a large class hierarchy unless it clearly solves a real problem.
+
+Do not introduce:
+
+* Docker
+* web frameworks
+* asynchronous code
+* ORMs
+* microservices
+* complex dependency injection
+
+unless the project reaches a point where they provide a concrete benefit.
+
+---
+
+## Instructions for Claude
+
+When working on this project:
+
+1. Inspect the existing repository before changing files.
+2. Preserve working functionality whenever possible.
+3. Make incremental changes rather than rewriting the entire project.
+4. Explain important architectural decisions briefly.
+5. Do not add unnecessary dependencies.
+6. Never hardcode API credentials.
+7. Keep each job source isolated behind its own adapter/module.
+8. Convert source-specific data into the shared `Job` representation as early as possible.
+9. Make failures in one source independent from other sources.
+10. Prioritize a working minimal implementation over speculative architecture.
+
+For the first task, initialize the basic project architecture and implement the Arbeitnow source so that running the program fetches current vacancies and prints normalized job information.
