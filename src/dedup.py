@@ -18,8 +18,10 @@ def _normalize_location(text: str) -> str:
     return _normalize(primary)
 
 
-def _dedup_key(job: Job) -> tuple[str, str, str]:
-    return (_normalize(job.company), _normalize(job.title), _normalize_location(job.location))
+def dedup_key(job: Job) -> str:
+    return "|".join(
+        (_normalize(job.company), _normalize(job.title), _normalize_location(job.location))
+    )
 
 
 def deduplicate(jobs: list[Job]) -> list[Job]:
@@ -28,10 +30,10 @@ def deduplicate(jobs: list[Job]) -> list[Job]:
     Matches on normalized company + title + location rather than URL,
     since the same vacancy can have a different URL on every job board.
     """
-    merged: dict[tuple[str, str, str], Job] = {}
+    merged: dict[str, Job] = {}
 
     for job in jobs:
-        key = _dedup_key(job)
+        key = dedup_key(job)
         existing = merged.get(key)
 
         if existing is None:

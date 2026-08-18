@@ -3,6 +3,7 @@ import itertools
 import sys
 from pathlib import Path
 
+import db
 from config import DEFAULT_CONFIG_PATH, load_search_config
 from dedup import deduplicate
 from models import Job
@@ -24,6 +25,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Path to the search config JSON file (default: search_config.json)",
     )
+    parser.add_argument(
+        "--db",
+        default=db.DEFAULT_DB_PATH,
+        type=Path,
+        help="Path to the SQLite database file (default: data/jobs.db)",
+    )
     return parser.parse_args()
 
 
@@ -35,10 +42,11 @@ def resolve_search_terms(args: argparse.Namespace) -> list[tuple[str, str]]:
     return list(itertools.product(config.queries, config.locations))
 
 
-def print_job(job: Job) -> None:
+def print_job(job: Job, is_new: bool) -> None:
     published = job.published_at.strftime("%Y-%m-%d") if job.published_at else "unknown"
     sources_label = "+".join(job.sources or [job.source])
-    print(f"[{sources_label}] {job.title} — {job.company} ({job.location})")
+    new_label = "NEW " if is_new else ""
+    print(f"[{sources_label}] {new_label}{job.title} — {job.company} ({job.location})")
     print(f"  published: {published}")
     print(f"  url: {job.url}")
     print()
@@ -72,12 +80,19 @@ def main() -> None:
     raw_count = len(jobs)
     jobs = deduplicate(jobs)
 
+    conn = db.connect(args.db)
+    new_jobs, seen_again = db.upsert_jobs(conn, jobs)
+    conn.close()
+    new_keys = {(j.title, j.company, j.location) for j in new_jobs}
+
     print(
         f"Found {len(jobs)} unique job(s) (from {raw_count} raw result(s)) "
-        f"across {len(search_terms)} search term(s)\n"
+        f"across {len(search_terms)} search term(s) "
+        f"— {len(new_jobs)} new, {len(seen_again)} already known\n"
     )
     for job in jobs:
-        print_job(job)
+        is_new = (job.title, job.company, job.location) in new_keys
+        print_job(job, is_new)
 
 
 if __name__ == "__main__":
