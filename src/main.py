@@ -1,7 +1,11 @@
 import argparse
+import itertools
 import sys
+from pathlib import Path
 
+from config import DEFAULT_CONFIG_PATH, load_search_config
 from models import Job
+from sources.adzuna import AdzunaSource
 from sources.arbeitnow import ArbeitnowSource
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -11,17 +15,23 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Search for job vacancies across multiple sources."
     )
+    parser.add_argument("--query", help="Single search term (overrides the config file)")
+    parser.add_argument("--location", help="Single location (overrides the config file)")
     parser.add_argument(
-        "--query",
-        default="Werkstudent Informatik",
-        help="Search term, e.g. 'Werkstudent Informatik'",
-    )
-    parser.add_argument(
-        "--location",
-        default="Tübingen",
-        help="Location to search in, e.g. 'Tübingen'",
+        "--config",
+        default=DEFAULT_CONFIG_PATH,
+        type=Path,
+        help="Path to the search config JSON file (default: search_config.json)",
     )
     return parser.parse_args()
+
+
+def resolve_search_terms(args: argparse.Namespace) -> list[tuple[str, str]]:
+    if args.query or args.location:
+        return [(args.query or "", args.location or "")]
+
+    config = load_search_config(args.config)
+    return list(itertools.product(config.queries, config.locations))
 
 
 def print_job(job: Job) -> None:
@@ -34,16 +44,30 @@ def print_job(job: Job) -> None:
 
 def main() -> None:
     args = parse_args()
-    sources = [ArbeitnowSource()]
+    search_terms = resolve_search_terms(args)
+    sources = [ArbeitnowSource(), AdzunaSource()]
 
     jobs: list[Job] = []
-    for source in sources:
-        try:
-            jobs.extend(source.search(args.query, args.location))
-        except Exception as exc:
-            print(f"[{source.name}] source failed: {exc}")
+    seen: set[tuple[str, str]] = set()
 
-    print(f"Found {len(jobs)} job(s) for query={args.query!r} location={args.location!r}\n")
+    for source in sources:
+        for query, location in search_terms:
+            try:
+                for job in source.search(query, location):
+                    key = (job.source, job.url)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    jobs.append(job)
+            except Exception as exc:
+                print(
+                    f"[{source.name}] search failed for "
+                    f"query={query!r} location={location!r}: {exc}"
+                )
+                print(f"[{source.name}] skipping remaining searches for this source")
+                break
+
+    print(f"Found {len(jobs)} job(s) across {len(search_terms)} search term(s)\n")
     for job in jobs:
         print_job(job)
 

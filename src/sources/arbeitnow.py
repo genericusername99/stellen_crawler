@@ -19,9 +19,20 @@ class ArbeitnowSource(JobSource):
 
     name = "arbeitnow"
 
+    def __init__(self) -> None:
+        self._cache: list[dict] | None = None
+
     def search(self, query: str = "", location: str = "") -> list[Job]:
-        jobs = [self._to_job(raw) for raw in self._fetch_all()]
+        jobs = [self._to_job(raw) for raw in self._get_raw_jobs()]
         return [job for job in jobs if self._matches(job, query, location)]
+
+    def _get_raw_jobs(self) -> list[dict]:
+        # Arbeitnow has no server-side filter, so a run that searches many
+        # query/location combinations would otherwise re-fetch the same
+        # ~450 jobs for every combination. Fetch once per instance instead.
+        if self._cache is None:
+            self._cache = self._fetch_all()
+        return self._cache
 
     def _fetch_all(self) -> list[dict]:
         raw_jobs: list[dict] = []
