@@ -14,7 +14,10 @@ python -m venv .venv
 Adzuna requires API credentials. Register a free app at
 https://developer.adzuna.com/, then copy `.env.example` to `.env` and fill
 in `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`. `.env` is git-ignored — never commit
-it. Arbeitnow needs no credentials.
+it. Arbeitnow needs no credentials. The Bundesagentur für Arbeit source uses
+a shared public API key (`jobboerse-jobsuche`, baked into the official
+Arbeitsagentur app and documented by the community for third-party use), so
+it also needs no per-user setup.
 
 ## Search configuration
 
@@ -42,7 +45,10 @@ python src\main.py --config path\to\other_config.json
 
 ## Status
 
-- Arbeitnow and Adzuna sources implemented (`src/sources/`).
-- Deduplication (cross-source, fuzzy), persistence, scoring: not yet implemented.
+- Sources implemented: Arbeitnow, Adzuna, Bundesagentur für Arbeit (`src/sources/`).
+- Deduplication across sources (`src/dedup.py`) and SQLite persistence with
+  new-job detection (`src/db.py`, `data/jobs.db`) are implemented.
+- Fuzzy (non-exact) deduplication, filtering/scoring, and coverage
+  measurement against a reference job board: not yet implemented.
 
 See `Context.txt` for the full project plan and milestones.

@@ -9,6 +9,7 @@ from dedup import deduplicate
 from models import Job
 from sources.adzuna import AdzunaSource
 from sources.arbeitnow import ArbeitnowSource
+from sources.bundesagentur import BundesagenturSource
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -55,7 +56,7 @@ def print_job(job: Job, is_new: bool) -> None:
 def main() -> None:
     args = parse_args()
     search_terms = resolve_search_terms(args)
-    sources = [ArbeitnowSource(), AdzunaSource()]
+    sources = [ArbeitnowSource(), AdzunaSource(), BundesagenturSource()]
 
     jobs: list[Job] = []
     seen: set[tuple[str, str]] = set()
