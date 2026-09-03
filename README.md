@@ -79,7 +79,7 @@ immediately), and fill in the title/company/location of what you found:
 Then run:
 
 ```powershell
-python src\coverage.py --query "Werkstudent Informatik" --location "Tübingen"
+.\.venv\Scripts\python.exe src\main.py --query "Werkstudent Informatik" --location "Tübingen"
 ```
 
 This runs the crawler over the same query/location and reports overlap,
